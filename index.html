@@ -1,0 +1,610 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ZDST3 — Descifrador</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg: #0f1117;
+      --surface: #1a1d27;
+      --border: #2a2d3a;
+      --accent: #4f8ef7;
+      --accent-dim: #2a4a8a;
+      --green: #22c55e;
+      --red: #ef4444;
+      --yellow: #f59e0b;
+      --text: #e2e8f0;
+      --muted: #64748b;
+      --radius: 12px;
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 24px 16px 48px;
+    }
+
+    .logo {
+      font-size: 13px;
+      letter-spacing: 4px;
+      color: var(--accent);
+      font-weight: 700;
+      margin-bottom: 4px;
+      margin-top: 32px;
+    }
+
+    h1 {
+      font-size: 22px;
+      font-weight: 600;
+      margin-bottom: 6px;
+      text-align: center;
+    }
+
+    .subtitle {
+      color: var(--muted);
+      font-size: 13px;
+      text-align: center;
+      margin-bottom: 32px;
+    }
+
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 24px;
+      width: 100%;
+      max-width: 560px;
+      margin-bottom: 16px;
+    }
+
+    .card-title {
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 1.5px;
+      color: var(--muted);
+      text-transform: uppercase;
+      margin-bottom: 16px;
+    }
+
+    /* URL input */
+    .url-input {
+      width: 100%;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      color: var(--text);
+      font-size: 13px;
+      padding: 10px 14px;
+      outline: none;
+      transition: border-color .2s;
+      font-family: monospace;
+    }
+    .url-input:focus { border-color: var(--accent); }
+    .url-input::placeholder { color: var(--muted); }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 20px;
+      border-radius: 8px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      border: none;
+      transition: opacity .15s, transform .1s;
+      text-decoration: none;
+    }
+    .btn:active { transform: scale(.97); }
+    .btn:disabled { opacity: .4; cursor: not-allowed; }
+
+    .btn-primary { background: var(--accent); color: #fff; }
+    .btn-outline {
+      background: transparent;
+      border: 1px solid var(--border);
+      color: var(--text);
+    }
+    .btn-green { background: var(--green); color: #fff; }
+    .btn-full { width: 100%; justify-content: center; margin-top: 12px; }
+
+    /* Steps */
+    .steps { display: flex; flex-direction: column; gap: 16px; }
+
+    .step {
+      display: flex;
+      gap: 16px;
+      align-items: flex-start;
+      opacity: .35;
+      transition: opacity .3s;
+    }
+    .step.active { opacity: 1; }
+    .step.done { opacity: .6; }
+
+    .step-num {
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      background: var(--accent-dim);
+      color: var(--accent);
+      font-size: 13px;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      margin-top: 2px;
+    }
+    .step.done .step-num { background: #14532d; color: var(--green); }
+
+    .step-body { flex: 1; }
+    .step-title { font-size: 15px; font-weight: 600; margin-bottom: 4px; }
+    .step-desc { font-size: 13px; color: var(--muted); line-height: 1.5; }
+
+    /* Drop zone */
+    .drop-zone {
+      border: 2px dashed var(--border);
+      border-radius: 10px;
+      padding: 28px 20px;
+      text-align: center;
+      cursor: pointer;
+      transition: border-color .2s, background .2s;
+      margin-top: 12px;
+    }
+    .drop-zone:hover, .drop-zone.drag-over {
+      border-color: var(--accent);
+      background: rgba(79,142,247,.06);
+    }
+    .drop-zone input { display: none; }
+    .drop-zone .dz-icon { font-size: 32px; margin-bottom: 8px; }
+    .drop-zone .dz-text { font-size: 14px; color: var(--muted); }
+    .drop-zone .dz-text strong { color: var(--text); }
+
+    /* Progress */
+    .progress-wrap { margin-top: 16px; display: none; }
+    .progress-label {
+      display: flex;
+      justify-content: space-between;
+      font-size: 12px;
+      color: var(--muted);
+      margin-bottom: 6px;
+    }
+    .progress-bar {
+      height: 6px;
+      background: var(--border);
+      border-radius: 99px;
+      overflow: hidden;
+    }
+    .progress-fill {
+      height: 100%;
+      background: var(--accent);
+      border-radius: 99px;
+      width: 0%;
+      transition: width .1s linear;
+    }
+
+    /* Alert */
+    .alert {
+      border-radius: 8px;
+      padding: 12px 16px;
+      font-size: 13px;
+      margin-top: 12px;
+      display: none;
+      line-height: 1.5;
+    }
+    .alert-error { background: rgba(239,68,68,.12); border: 1px solid rgba(239,68,68,.3); color: #fca5a5; }
+    .alert-success { background: rgba(34,197,94,.12); border: 1px solid rgba(34,197,94,.3); color: #86efac; }
+    .alert-info { background: rgba(79,142,247,.12); border: 1px solid rgba(79,142,247,.3); color: #93c5fd; }
+
+    /* Blob link */
+    .blob-link-wrap { margin-top: 12px; }
+    .blob-link {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 10px 14px;
+      font-size: 12px;
+      font-family: monospace;
+      color: var(--accent);
+      word-break: break-all;
+      line-height: 1.4;
+    }
+
+    .tag {
+      display: inline-block;
+      font-size: 11px;
+      font-weight: 700;
+      padding: 2px 8px;
+      border-radius: 99px;
+      margin-left: 8px;
+    }
+    .tag-green { background: #14532d; color: var(--green); }
+    .tag-yellow { background: #451a03; color: var(--yellow); }
+
+    #section-input { display: block; }
+    #section-main { display: none; }
+
+    footer {
+      margin-top: 48px;
+      font-size: 12px;
+      color: var(--muted);
+      text-align: center;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="logo">ZDST3</div>
+  <h1>Descifrador Web</h1>
+  <p class="subtitle">Descarga y descifra archivos protegidos · sin instalar nada</p>
+
+  <!-- Panel 1: pegar URL -->
+  <div class="card" id="section-input">
+    <div class="card-title">Pega tu enlace ZDST3</div>
+    <input type="text" class="url-input" id="url-input"
+           placeholder="http://nexus.uclv.edu.cu/...#k=clave&sha256=hash"
+           autocomplete="off" spellcheck="false">
+    <button class="btn btn-primary btn-full" onclick="parseUrl()">Continuar</button>
+    <div class="alert alert-error" id="err-url"></div>
+  </div>
+
+  <!-- Panel 2: flujo principal -->
+  <div class="card" id="section-main">
+    <div class="card-title">
+      Proceso de descarga
+      <span class="tag tag-green" id="tag-zeror" style="display:none">Zero-Rated UCLV</span>
+    </div>
+
+    <div class="steps">
+
+      <!-- Paso 1 -->
+      <div class="step active" id="step1">
+        <div class="step-num">1</div>
+        <div class="step-body">
+          <div class="step-title">Descarga el blob cifrado</div>
+          <div class="step-desc">
+            Tu navegador lo descarga directamente desde el proxy UCLV (gratis en Cuba).
+          </div>
+          <div class="blob-link-wrap">
+            <div class="blob-link" id="blob-url-display"></div>
+          </div>
+          <a class="btn btn-primary btn-full" id="btn-download-blob" href="#" download>
+            ⬇ Descargar blob (gratis)
+          </a>
+        </div>
+      </div>
+
+      <!-- Paso 2 -->
+      <div class="step" id="step2">
+        <div class="step-num">2</div>
+        <div class="step-body">
+          <div class="step-title">Selecciona el archivo descargado</div>
+          <div class="step-desc">
+            Abre la carpeta de Descargas y arrastra aquí el archivo .blob.part o el archivo sin extensión.
+          </div>
+          <div class="drop-zone" id="drop-zone" onclick="document.getElementById('file-input').click()">
+            <input type="file" id="file-input" onchange="onFileSelected(this.files[0])">
+            <div class="dz-icon">📂</div>
+            <div class="dz-text"><strong>Seleccionar archivo</strong> o arrastrar aquí</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Paso 3 -->
+      <div class="step" id="step3">
+        <div class="step-num">3</div>
+        <div class="step-body">
+          <div class="step-title">Descifrado local</div>
+          <div class="step-desc">La clave AES nunca salió de tu navegador.</div>
+          <div class="progress-wrap" id="progress-wrap">
+            <div class="progress-label">
+              <span id="progress-text">Descifrando...</span>
+              <span id="progress-pct">0%</span>
+            </div>
+            <div class="progress-bar"><div class="progress-fill" id="progress-fill"></div></div>
+          </div>
+          <div class="alert alert-error" id="err-decrypt"></div>
+          <div class="alert alert-success" id="ok-decrypt"></div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <footer>
+    Descifrado 100% local · Clave AES nunca abandona el dispositivo ·
+    <a href="https://github.com/zdst3" style="color:var(--muted)">GitHub</a>
+  </footer>
+
+<script>
+// ─── Estado ────────────────────────────────────────────────────────────────
+const state = {
+  blobUrl: null,       // URL del blob sin fragmento
+  keyBytes: null,      // Uint8Array de 32 bytes
+  expectedSha256: null // hex string
+};
+
+// ─── Utilidades ────────────────────────────────────────────────────────────
+function hex(buf) {
+  return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
+function b64urlDecode(s) {
+  s = s.replace(/-/g, '+').replace(/_/g, '/');
+  while (s.length % 4) s += '=';
+  const bin = atob(s);
+  return Uint8Array.from(bin, c => c.charCodeAt(0));
+}
+
+function showAlert(id, msg) {
+  const el = document.getElementById(id);
+  el.textContent = msg;
+  el.style.display = 'block';
+}
+
+function hideAlert(id) {
+  document.getElementById(id).style.display = 'none';
+}
+
+function setStepActive(n) {
+  [1, 2, 3].forEach(i => {
+    const s = document.getElementById(`step${i}`);
+    s.classList.remove('active', 'done');
+    if (i < n) s.classList.add('done');
+    if (i === n) s.classList.add('active');
+  });
+}
+
+// ─── Parser de URL ─────────────────────────────────────────────────────────
+function parseUrlString(raw) {
+  const hashIdx = raw.indexOf('#');
+  if (hashIdx === -1) throw new Error('La URL no contiene el fragmento #k=... con la clave.');
+
+  const cleanUrl = raw.slice(0, hashIdx);
+  const fragment = raw.slice(hashIdx + 1);
+  const params = {};
+  fragment.split('&').forEach(p => {
+    const [k, v] = p.split('=');
+    if (k && v) params[k] = v;
+  });
+
+  if (!params.k) throw new Error('No se encontró #k=<clave> en la URL.');
+
+  const keyBytes = b64urlDecode(params.k);
+  if (keyBytes.length !== 32) throw new Error(`Clave inválida: ${keyBytes.length} bytes (se esperan 32).`);
+
+  return {
+    blobUrl: cleanUrl,
+    keyBytes,
+    expectedSha256: params.sha256 || null
+  };
+}
+
+function parseUrl() {
+  hideAlert('err-url');
+  const raw = document.getElementById('url-input').value.trim();
+  if (!raw) { showAlert('err-url', 'Pega un enlace ZDST3.'); return; }
+  try {
+    const parsed = parseUrlString(raw);
+    applyParsed(parsed);
+  } catch (e) {
+    showAlert('err-url', e.message);
+  }
+}
+
+function applyParsed(parsed) {
+  Object.assign(state, parsed);
+
+  // Determinar si es URL UCLV (zero-rated)
+  const isUclv = state.blobUrl.includes('nexus.uclv.edu.cu');
+
+  // Mostrar panel principal
+  document.getElementById('section-input').style.display = 'none';
+  document.getElementById('section-main').style.display = 'block';
+  if (isUclv) document.getElementById('tag-zeror').style.display = 'inline-block';
+
+  // Mostrar URL truncada
+  const display = document.getElementById('blob-url-display');
+  const shortened = state.blobUrl.length > 60
+    ? state.blobUrl.slice(0, 30) + '…' + state.blobUrl.slice(-24)
+    : state.blobUrl;
+  display.textContent = shortened;
+  display.title = state.blobUrl;
+
+  // Configurar botón de descarga
+  const btn = document.getElementById('btn-download-blob');
+  btn.href = state.blobUrl;
+  // Sugerir nombre de archivo basado en hash
+  const hash = state.expectedSha256 || 'blob';
+  btn.download = `zdst3_${hash.slice(0, 12)}.blob`;
+
+  // Activar paso 2 al hacer clic en descarga
+  btn.addEventListener('click', () => {
+    setTimeout(() => setStepActive(2), 300);
+  }, { once: true });
+
+  setStepActive(1);
+}
+
+// ─── Drop Zone ─────────────────────────────────────────────────────────────
+const dropZone = document.getElementById('drop-zone');
+
+dropZone.addEventListener('dragover', e => {
+  e.preventDefault();
+  dropZone.classList.add('drag-over');
+});
+dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag-over'));
+dropZone.addEventListener('drop', e => {
+  e.preventDefault();
+  dropZone.classList.remove('drag-over');
+  const file = e.dataTransfer.files[0];
+  if (file) onFileSelected(file);
+});
+
+async function onFileSelected(file) {
+  if (!state.keyBytes) {
+    showAlert('err-decrypt', 'Primero pega un enlace ZDST3 válido.');
+    return;
+  }
+  setStepActive(3);
+  await decryptFile(file);
+}
+
+// ─── Descifrado ────────────────────────────────────────────────────────────
+const MAGIC = new Uint8Array([0x5A, 0x44, 0x53, 0x54, 0x33]); // "ZDST3"
+const GGUF_MAGIC = new Uint8Array([0x47, 0x47, 0x55, 0x46]);   // "GGUF"
+
+function findMagic(data) {
+  for (let i = 0; i <= data.length - 5; i++) {
+    if (data[i]===0x5A && data[i+1]===0x44 && data[i+2]===0x53 && data[i+3]===0x54 && data[i+4]===0x33)
+      return i;
+  }
+  return -1;
+}
+
+function setProgress(pct, label) {
+  document.getElementById('progress-fill').style.width = pct + '%';
+  document.getElementById('progress-pct').textContent = Math.round(pct) + '%';
+  if (label) document.getElementById('progress-text').textContent = label;
+}
+
+async function decryptFile(file) {
+  hideAlert('err-decrypt');
+  hideAlert('ok-decrypt');
+
+  const progressWrap = document.getElementById('progress-wrap');
+  progressWrap.style.display = 'block';
+  setProgress(0, 'Leyendo archivo...');
+
+  try {
+    // 1. Leer archivo completo
+    const raw = new Uint8Array(await file.arrayBuffer());
+
+    // 2. Verificar SHA-256 del blob (si viene en la URL)
+    if (state.expectedSha256) {
+      setProgress(5, 'Verificando integridad...');
+      const digest = hex(await crypto.subtle.digest('SHA-256', raw));
+      if (digest !== state.expectedSha256) {
+        throw new Error(`SHA-256 no coincide.\nEsperado: ${state.expectedSha256}\nObtenido:  ${digest}\n\n¿Descargaste el archivo correcto?`);
+      }
+    }
+
+    // 3. Saltar prefijo GGUF si existe
+    let offset = 0;
+    if (raw[0] === 0x47 && raw[1] === 0x47 && raw[2] === 0x55 && raw[3] === 0x46) {
+      const zdst3Pos = findMagic(raw);
+      if (zdst3Pos === -1) throw new Error('Prefijo GGUF encontrado pero no se halló el magic ZDST3.');
+      offset = zdst3Pos;
+    }
+
+    // 4. Leer cabecera ZDST3 (20 bytes)
+    if (offset + 20 > raw.length) throw new Error('Archivo demasiado corto para contener una cabecera ZDST3.');
+
+    const magic = raw.slice(offset, offset + 5);
+    for (let i = 0; i < 5; i++) {
+      if (magic[i] !== MAGIC[i]) throw new Error('Firma ZDST3 inválida. ¿Es el archivo correcto?');
+    }
+    const version = raw[offset + 5];
+    if (version !== 1) throw new Error(`Versión de formato ${version} no soportada.`);
+    const ext = new TextDecoder().decode(raw.slice(offset + 10, offset + 20)).replace(/\x00/g, '').trim();
+    offset += 20;
+
+    // 5. Importar clave AES-256-GCM
+    const cryptoKey = await crypto.subtle.importKey(
+      'raw', state.keyBytes, { name: 'AES-GCM' }, false, ['decrypt']
+    );
+
+    // 6. Descifrar bloques
+    setProgress(10, `Descifrando .${ext || 'mp4'}...`);
+    const chunks = [];
+    let totalDecrypted = 0;
+    const encSize = raw.length - offset;
+    let chunkIdx = 0;
+    const dv = new DataView(raw.buffer);
+
+    while (offset < raw.length) {
+      if (offset + 16 > raw.length) break;
+
+      const nonce = raw.slice(offset, offset + 12);
+      const payloadLen = dv.getUint32(offset + 12, true); // little-endian
+      if (offset + 16 + payloadLen > raw.length) break;
+
+      const encrypted = raw.slice(offset + 16, offset + 16 + payloadLen);
+
+      // Verificar nonce secuencial
+      const expectedNonce = new Uint8Array(12);
+      new DataView(expectedNonce.buffer).setBigUint64(0, BigInt(chunkIdx), true);
+      for (let i = 0; i < 12; i++) {
+        if (nonce[i] !== expectedNonce[i]) throw new Error(`Error de sincronía en bloque ${chunkIdx}.`);
+      }
+
+      const decrypted = await crypto.subtle.decrypt(
+        { name: 'AES-GCM', iv: nonce },
+        cryptoKey,
+        encrypted
+      );
+
+      chunks.push(new Uint8Array(decrypted));
+      totalDecrypted += decrypted.byteLength;
+      chunkIdx++;
+      offset += 16 + payloadLen;
+
+      const pct = 10 + 85 * (offset / raw.length);
+      setProgress(pct, `Descifrando bloque ${chunkIdx}… (${(totalDecrypted/1024/1024).toFixed(1)} MB)`);
+      // Ceder al event loop para actualizar UI
+      await new Promise(r => setTimeout(r, 0));
+    }
+
+    // 7. Ensamblar y descargar
+    setProgress(98, 'Preparando descarga...');
+    const blob = new Blob(chunks);
+    const outName = file.name.replace(/\.(blob|enc|part|blob\.part)$/i, '') || 'video';
+    const finalName = outName.includes('.') ? outName : `${outName}.${ext || 'mp4'}`;
+
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = finalName;
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(() => { URL.revokeObjectURL(url); a.remove(); }, 5000);
+
+    setProgress(100, 'Listo');
+    showAlert('ok-decrypt',
+      `✓ Descifrado correcto — ${(totalDecrypted/1024/1024).toFixed(2)} MB · ${chunkIdx} bloque(s) · guardado como "${finalName}"`
+    );
+
+  } catch (e) {
+    showAlert('err-decrypt', '✗ ' + e.message);
+    setProgress(0, 'Error');
+  }
+}
+
+// ─── Auto-parse desde el hash de la página ─────────────────────────────────
+(function init() {
+  // Si la página misma fue abierta con #k=... (el usuario pegó la URL completa en el browser)
+  const hash = location.hash.slice(1);
+  if (hash.includes('k=')) {
+    const params = {};
+    hash.split('&').forEach(p => { const [k,v]=p.split('='); if(k&&v) params[k]=decodeURIComponent(v); });
+    if (params.k) {
+      // Necesitamos reconstruir la blob URL — no la tenemos directamente
+      // Mostrar input pre-llenado para que el usuario confirme
+      document.getElementById('url-input').value = location.href;
+      document.getElementById('section-input').style.display = 'block';
+    }
+  }
+})();
+</script>
+</body>
+</html>
