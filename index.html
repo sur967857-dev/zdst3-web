@@ -329,21 +329,26 @@
 <script>
 // ─── Estado ────────────────────────────────────────────────────────────────
 const state = {
-  blobUrl: null,       // URL del blob sin fragmento
-  keyBytes: null,      // Uint8Array de 32 bytes
-  expectedSha256: null // hex string
+  blobUrl: null,
+  keyBytes: null,      // Uint8Array 32 bytes
+  kid: null,           // UUID string (nuevo formato) o null (formato legado #k=)
+  expectedSha256: null
 };
+
+const KEYS_BASE = 'https://sur967857-dev.github.io/zdst3-web/keys';
+const LARGE_FILE = 500 * 1024 * 1024;  // 500 MB — umbral para omitir SHA-256
+const READ_SIZE  = 8  * 1024 * 1024;   // 8 MB por lectura de slice
+const MAGIC = new Uint8Array([0x5A, 0x44, 0x53, 0x54, 0x33]); // "ZDST3"
 
 // ─── Utilidades ────────────────────────────────────────────────────────────
 function hex(buf) {
-  return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join('');
+  return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2,'0')).join('');
 }
 
 function b64urlDecode(s) {
-  s = s.replace(/-/g, '+').replace(/_/g, '/');
+  s = s.replace(/-/g,'+').replace(/_/g,'/');
   while (s.length % 4) s += '=';
-  const bin = atob(s);
-  return Uint8Array.from(bin, c => c.charCodeAt(0));
+  return Uint8Array.from(atob(s), c => c.charCodeAt(0));
 }
 
 function showAlert(id, msg) {
@@ -351,125 +356,15 @@ function showAlert(id, msg) {
   el.textContent = msg;
   el.style.display = 'block';
 }
-
-function hideAlert(id) {
-  document.getElementById(id).style.display = 'none';
-}
+function hideAlert(id) { document.getElementById(id).style.display = 'none'; }
 
 function setStepActive(n) {
-  [1, 2, 3].forEach(i => {
+  [1,2,3].forEach(i => {
     const s = document.getElementById(`step${i}`);
-    s.classList.remove('active', 'done');
+    s.classList.remove('active','done');
     if (i < n) s.classList.add('done');
     if (i === n) s.classList.add('active');
   });
-}
-
-// ─── Parser de URL ─────────────────────────────────────────────────────────
-function parseUrlString(raw) {
-  const hashIdx = raw.indexOf('#');
-  if (hashIdx === -1) throw new Error('La URL no contiene el fragmento #k=... con la clave.');
-
-  const cleanUrl = raw.slice(0, hashIdx);
-  const fragment = raw.slice(hashIdx + 1);
-  const params = {};
-  fragment.split('&').forEach(p => {
-    const [k, v] = p.split('=');
-    if (k && v) params[k] = v;
-  });
-
-  if (!params.k) throw new Error('No se encontró #k=<clave> en la URL.');
-
-  const keyBytes = b64urlDecode(params.k);
-  if (keyBytes.length !== 32) throw new Error(`Clave inválida: ${keyBytes.length} bytes (se esperan 32).`);
-
-  return {
-    blobUrl: cleanUrl,
-    keyBytes,
-    expectedSha256: params.sha256 || null
-  };
-}
-
-function parseUrl() {
-  hideAlert('err-url');
-  const raw = document.getElementById('url-input').value.trim();
-  if (!raw) { showAlert('err-url', 'Pega un enlace ZDST3.'); return; }
-  try {
-    const parsed = parseUrlString(raw);
-    applyParsed(parsed);
-  } catch (e) {
-    showAlert('err-url', e.message);
-  }
-}
-
-function applyParsed(parsed) {
-  Object.assign(state, parsed);
-
-  // Determinar si es URL UCLV (zero-rated)
-  const isUclv = state.blobUrl.includes('nexus.uclv.edu.cu');
-
-  // Mostrar panel principal
-  document.getElementById('section-input').style.display = 'none';
-  document.getElementById('section-main').style.display = 'block';
-  if (isUclv) document.getElementById('tag-zeror').style.display = 'inline-block';
-
-  // Mostrar URL truncada
-  const display = document.getElementById('blob-url-display');
-  const shortened = state.blobUrl.length > 60
-    ? state.blobUrl.slice(0, 30) + '…' + state.blobUrl.slice(-24)
-    : state.blobUrl;
-  display.textContent = shortened;
-  display.title = state.blobUrl;
-
-  // Configurar botón de descarga
-  const btn = document.getElementById('btn-download-blob');
-  btn.href = state.blobUrl;
-  // Sugerir nombre de archivo basado en hash
-  const hash = state.expectedSha256 || 'blob';
-  btn.download = `zdst3_${hash.slice(0, 12)}.blob`;
-
-  // Activar paso 2 al hacer clic en descarga
-  btn.addEventListener('click', () => {
-    setTimeout(() => setStepActive(2), 300);
-  }, { once: true });
-
-  setStepActive(1);
-}
-
-// ─── Drop Zone ─────────────────────────────────────────────────────────────
-const dropZone = document.getElementById('drop-zone');
-
-dropZone.addEventListener('dragover', e => {
-  e.preventDefault();
-  dropZone.classList.add('drag-over');
-});
-dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag-over'));
-dropZone.addEventListener('drop', e => {
-  e.preventDefault();
-  dropZone.classList.remove('drag-over');
-  const file = e.dataTransfer.files[0];
-  if (file) onFileSelected(file);
-});
-
-async function onFileSelected(file) {
-  if (!state.keyBytes) {
-    showAlert('err-decrypt', 'Primero pega un enlace ZDST3 válido.');
-    return;
-  }
-  setStepActive(3);
-  await decryptFile(file);
-}
-
-// ─── Descifrado ────────────────────────────────────────────────────────────
-const MAGIC = new Uint8Array([0x5A, 0x44, 0x53, 0x54, 0x33]); // "ZDST3"
-const GGUF_MAGIC = new Uint8Array([0x47, 0x47, 0x55, 0x46]);   // "GGUF"
-
-function findMagic(data) {
-  for (let i = 0; i <= data.length - 5; i++) {
-    if (data[i]===0x5A && data[i+1]===0x44 && data[i+2]===0x53 && data[i+3]===0x54 && data[i+4]===0x33)
-      return i;
-  }
-  return -1;
 }
 
 function setProgress(pct, label) {
@@ -478,110 +373,244 @@ function setProgress(pct, label) {
   if (label) document.getElementById('progress-text').textContent = label;
 }
 
+function findMagic(data) {
+  for (let i = 0; i <= data.length - 5; i++) {
+    if (data[i]===0x5A&&data[i+1]===0x44&&data[i+2]===0x53&&data[i+3]===0x54&&data[i+4]===0x33) return i;
+  }
+  return -1;
+}
+
+// ─── Parser de URL ─────────────────────────────────────────────────────────
+function parseUrlString(raw) {
+  const hashIdx = raw.indexOf('#');
+  if (hashIdx === -1) throw new Error('La URL no contiene fragmento #kid= o #k=.');
+
+  const cleanUrl = raw.slice(0, hashIdx);
+  const params = {};
+  raw.slice(hashIdx + 1).split('&').forEach(p => {
+    const eq = p.indexOf('=');
+    if (eq > 0) params[p.slice(0, eq)] = decodeURIComponent(p.slice(eq + 1));
+  });
+
+  if (params.kid) {
+    return { blobUrl: cleanUrl, kid: params.kid, keyBytes: null, expectedSha256: params.sha256 || null };
+  }
+
+  if (!params.k) throw new Error('No se encontró #kid= ni #k= en la URL.');
+  const keyBytes = b64urlDecode(params.k);
+  if (keyBytes.length !== 32) throw new Error(`Clave inválida: ${keyBytes.length} bytes (se esperan 32).`);
+  return { blobUrl: cleanUrl, kid: null, keyBytes, expectedSha256: params.sha256 || null };
+}
+
+async function parseUrl() {
+  hideAlert('err-url');
+  const raw = document.getElementById('url-input').value.trim();
+  if (!raw) { showAlert('err-url', 'Pega un enlace ZDST3.'); return; }
+
+  let parsed;
+  try { parsed = parseUrlString(raw); }
+  catch (e) { showAlert('err-url', e.message); return; }
+
+  if (parsed.kid) {
+    showAlert('err-url', 'Obteniendo clave desde GitHub Pages…');
+    document.getElementById('err-url').className = 'alert alert-info';
+    document.getElementById('err-url').style.display = 'block';
+    try {
+      const r = await fetch(`${KEYS_BASE}/${parsed.kid}.json`);
+      if (r.status === 404) throw new Error('Enlace expirado o inválido (clave eliminada).');
+      if (!r.ok) throw new Error(`Error al obtener clave: HTTP ${r.status}`);
+      const j = await r.json();
+      parsed.keyBytes = b64urlDecode(j.k);
+      if (parsed.keyBytes.length !== 32) throw new Error('Clave de servidor inválida.');
+    } catch (e) {
+      document.getElementById('err-url').className = 'alert alert-error';
+      showAlert('err-url', e.message);
+      return;
+    }
+    hideAlert('err-url');
+    document.getElementById('err-url').className = 'alert alert-error';
+  }
+
+  applyParsed(parsed);
+}
+
+function applyParsed(parsed) {
+  Object.assign(state, parsed);
+
+  document.getElementById('section-input').style.display = 'none';
+  document.getElementById('section-main').style.display = 'block';
+
+  if (state.blobUrl.includes('nexus.uclv.edu.cu'))
+    document.getElementById('tag-zeror').style.display = 'inline-block';
+
+  const display = document.getElementById('blob-url-display');
+  const shortened = state.blobUrl.length > 60
+    ? state.blobUrl.slice(0,30)+'…'+state.blobUrl.slice(-24)
+    : state.blobUrl;
+  display.textContent = shortened;
+  display.title = state.blobUrl;
+
+  const btn = document.getElementById('btn-download-blob');
+  btn.href = state.blobUrl;
+  btn.download = `zdst3_${(state.expectedSha256||'blob').slice(0,12)}.blob`;
+  btn.addEventListener('click', () => setTimeout(() => setStepActive(2), 300), { once: true });
+
+  setStepActive(1);
+}
+
+// ─── Drop Zone ─────────────────────────────────────────────────────────────
+const dropZone = document.getElementById('drop-zone');
+dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('drag-over'); });
+dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag-over'));
+dropZone.addEventListener('drop', e => {
+  e.preventDefault(); dropZone.classList.remove('drag-over');
+  if (e.dataTransfer.files[0]) onFileSelected(e.dataTransfer.files[0]);
+});
+
+async function onFileSelected(file) {
+  if (!state.keyBytes) { showAlert('err-decrypt', 'Primero pega un enlace ZDST3 válido.'); return; }
+  setStepActive(3);
+  await decryptFile(file);
+}
+
+// ─── Descifrado por bloques sin cargar el archivo completo en RAM ───────────
 async function decryptFile(file) {
   hideAlert('err-decrypt');
   hideAlert('ok-decrypt');
-
-  const progressWrap = document.getElementById('progress-wrap');
-  progressWrap.style.display = 'block';
-  setProgress(0, 'Leyendo archivo...');
+  document.getElementById('progress-wrap').style.display = 'block';
+  setProgress(0, 'Analizando archivo…');
 
   try {
-    // 1. Leer archivo completo
-    const raw = new Uint8Array(await file.arrayBuffer());
+    // 1. Leer solo los primeros 256 bytes para el encabezado
+    const headBuf = new Uint8Array(await file.slice(0, 256).arrayBuffer());
 
-    // 2. Verificar SHA-256 del blob (si viene en la URL)
+    // 2. Ubicar el magic ZDST3 (saltar prefijo GGUF si existe)
+    let dataOffset = 0;
+    if (headBuf[0]===0x47&&headBuf[1]===0x47&&headBuf[2]===0x55&&headBuf[3]===0x46) {
+      const pos = findMagic(headBuf);
+      if (pos === -1) throw new Error('Prefijo GGUF detectado pero no se halló el magic ZDST3.');
+      dataOffset = pos;
+    }
+
+    // 3. Parsear cabecera ZDST3 (20 bytes)
+    if (dataOffset + 20 > headBuf.length) throw new Error('Archivo demasiado corto para cabecera ZDST3.');
+    for (let i = 0; i < 5; i++) {
+      if (headBuf[dataOffset+i] !== MAGIC[i]) throw new Error('Firma ZDST3 inválida. ¿Es el archivo correcto?');
+    }
+    const version = headBuf[dataOffset+5];
+    if (version !== 1) throw new Error(`Versión de formato ${version} no soportada.`);
+    const ext = new TextDecoder().decode(headBuf.slice(dataOffset+10, dataOffset+20)).replace(/\x00/g,'').trim();
+    dataOffset += 20;
+
+    // 4. SHA-256 solo para archivos pequeños (≤500 MB)
     if (state.expectedSha256) {
-      setProgress(5, 'Verificando integridad...');
-      const digest = hex(await crypto.subtle.digest('SHA-256', raw));
-      if (digest !== state.expectedSha256) {
-        throw new Error(`SHA-256 no coincide.\nEsperado: ${state.expectedSha256}\nObtenido:  ${digest}\n\n¿Descargaste el archivo correcto?`);
+      if (file.size <= LARGE_FILE) {
+        setProgress(2, 'Verificando integridad…');
+        const digest = hex(await crypto.subtle.digest('SHA-256', await file.arrayBuffer()));
+        if (digest !== state.expectedSha256)
+          throw new Error(`SHA-256 no coincide.\nEsperado: ${state.expectedSha256}\nObtenido:  ${digest}`);
+      } else {
+        setProgress(2, 'Archivo grande — integridad verificada bloque a bloque por AES-GCM');
       }
     }
 
-    // 3. Saltar prefijo GGUF si existe
-    let offset = 0;
-    if (raw[0] === 0x47 && raw[1] === 0x47 && raw[2] === 0x55 && raw[3] === 0x46) {
-      const zdst3Pos = findMagic(raw);
-      if (zdst3Pos === -1) throw new Error('Prefijo GGUF encontrado pero no se halló el magic ZDST3.');
-      offset = zdst3Pos;
-    }
-
-    // 4. Leer cabecera ZDST3 (20 bytes)
-    if (offset + 20 > raw.length) throw new Error('Archivo demasiado corto para contener una cabecera ZDST3.');
-
-    const magic = raw.slice(offset, offset + 5);
-    for (let i = 0; i < 5; i++) {
-      if (magic[i] !== MAGIC[i]) throw new Error('Firma ZDST3 inválida. ¿Es el archivo correcto?');
-    }
-    const version = raw[offset + 5];
-    if (version !== 1) throw new Error(`Versión de formato ${version} no soportada.`);
-    const ext = new TextDecoder().decode(raw.slice(offset + 10, offset + 20)).replace(/\x00/g, '').trim();
-    offset += 20;
-
-    // 5. Importar clave AES-256-GCM
+    // 5. Importar clave
     const cryptoKey = await crypto.subtle.importKey(
       'raw', state.keyBytes, { name: 'AES-GCM' }, false, ['decrypt']
     );
 
-    // 6. Descifrar bloques
-    setProgress(10, `Descifrando .${ext || 'mp4'}...`);
-    const chunks = [];
-    let totalDecrypted = 0;
-    const encSize = raw.length - offset;
-    let chunkIdx = 0;
-    const dv = new DataView(raw.buffer);
+    // 6. Preparar salida: File System Access API si disponible, si no Blob en memoria
+    const outBase = file.name.replace(/\.(blob|enc|part|blob\.part)$/i, '') || 'zdst3_output';
+    const finalName = outBase.includes('.') ? outBase : `${outBase}.${ext||'mp4'}`;
+    let writable = null;
+    let fallbackChunks = null;
 
-    while (offset < raw.length) {
-      if (offset + 16 > raw.length) break;
-
-      const nonce = raw.slice(offset, offset + 12);
-      const payloadLen = dv.getUint32(offset + 12, true); // little-endian
-      if (offset + 16 + payloadLen > raw.length) break;
-
-      const encrypted = raw.slice(offset + 16, offset + 16 + payloadLen);
-
-      // Verificar nonce secuencial
-      const expectedNonce = new Uint8Array(12);
-      new DataView(expectedNonce.buffer).setBigUint64(0, BigInt(chunkIdx), true);
-      for (let i = 0; i < 12; i++) {
-        if (nonce[i] !== expectedNonce[i]) throw new Error(`Error de sincronía en bloque ${chunkIdx}.`);
+    if ('showSaveFilePicker' in window) {
+      try {
+        const handle = await showSaveFilePicker({
+          suggestedName: finalName,
+          types: [{ description: 'Video', accept: { 'video/*': ['.'+( ext||'mp4')] } }]
+        });
+        writable = await handle.createWritable();
+      } catch (err) {
+        if (err.name === 'AbortError') throw new Error('Descarga cancelada.');
+        fallbackChunks = [];  // Picker falló por otra razón → modo compatibilidad
       }
-
-      const decrypted = await crypto.subtle.decrypt(
-        { name: 'AES-GCM', iv: nonce },
-        cryptoKey,
-        encrypted
-      );
-
-      chunks.push(new Uint8Array(decrypted));
-      totalDecrypted += decrypted.byteLength;
-      chunkIdx++;
-      offset += 16 + payloadLen;
-
-      const pct = 10 + 85 * (offset / raw.length);
-      setProgress(pct, `Descifrando bloque ${chunkIdx}… (${(totalDecrypted/1024/1024).toFixed(1)} MB)`);
-      // Ceder al event loop para actualizar UI
-      await new Promise(r => setTimeout(r, 0));
+    } else {
+      fallbackChunks = [];
     }
 
-    // 7. Ensamblar y descargar
-    setProgress(98, 'Preparando descarga...');
-    const blob = new Blob(chunks);
-    const outName = file.name.replace(/\.(blob|enc|part|blob\.part)$/i, '') || 'video';
-    const finalName = outName.includes('.') ? outName : `${outName}.${ext || 'mp4'}`;
+    // 7. Descifrar leyendo el archivo en bloques de READ_SIZE
+    setProgress(5, `Descifrando .${ext||'mp4'}…`);
+    let buffer = new Uint8Array(0);
+    let filePos = dataOffset;
+    let chunkIdx = 0;
+    let totalDecrypted = 0;
 
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = finalName;
-    document.body.appendChild(a);
-    a.click();
-    setTimeout(() => { URL.revokeObjectURL(url); a.remove(); }, 5000);
+    while (true) {
+      // Leer más datos si el buffer es pequeño y quedan bytes en el archivo
+      if (filePos < file.size && buffer.length < READ_SIZE * 2) {
+        const end = Math.min(filePos + READ_SIZE, file.size);
+        const slice = new Uint8Array(await file.slice(filePos, end).arrayBuffer());
+        filePos = end;
+        const merged = new Uint8Array(buffer.length + slice.length);
+        merged.set(buffer); merged.set(slice, buffer.length);
+        buffer = merged;
+      }
+
+      // Procesar todos los bloques ZDST3 completos del buffer
+      const dv = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+      let consumed = 0;
+
+      while (buffer.length - consumed >= 16) {
+        const payloadLen = dv.getUint32(consumed + 12, true);
+        if (buffer.length - consumed < 16 + payloadLen) break;
+
+        const nonce = buffer.slice(consumed, consumed + 12);
+        const expNonce = new Uint8Array(12);
+        new DataView(expNonce.buffer).setBigUint64(0, BigInt(chunkIdx), true);
+        for (let i = 0; i < 12; i++) {
+          if (nonce[i] !== expNonce[i]) throw new Error(`Error de sincronía en bloque ${chunkIdx}.`);
+        }
+
+        const encrypted = buffer.slice(consumed + 16, consumed + 16 + payloadLen);
+        const decrypted = await crypto.subtle.decrypt({ name:'AES-GCM', iv:nonce }, cryptoKey, encrypted);
+        const decBytes = new Uint8Array(decrypted);
+
+        if (writable) await writable.write(decBytes);
+        else fallbackChunks.push(decBytes);
+
+        totalDecrypted += decBytes.length;
+        chunkIdx++;
+        consumed += 16 + payloadLen;
+      }
+
+      buffer = buffer.slice(consumed);
+
+      const pct = 5 + 90 * Math.min(filePos / file.size, 1);
+      setProgress(pct, `Descifrando… ${(totalDecrypted/1024/1024).toFixed(1)} MB`);
+      await new Promise(r => setTimeout(r, 0));
+
+      if (filePos >= file.size && buffer.length < 16) break;
+    }
+
+    // 8. Finalizar salida
+    setProgress(98, 'Guardando…');
+    if (writable) {
+      await writable.close();
+    } else {
+      const blob = new Blob(fallbackChunks);
+      fallbackChunks = null;
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = finalName;
+      document.body.appendChild(a); a.click();
+      setTimeout(() => { URL.revokeObjectURL(url); a.remove(); }, 5000);
+    }
 
     setProgress(100, 'Listo');
     showAlert('ok-decrypt',
-      `✓ Descifrado correcto — ${(totalDecrypted/1024/1024).toFixed(2)} MB · ${chunkIdx} bloque(s) · guardado como "${finalName}"`
+      `✓ ${(totalDecrypted/1024/1024).toFixed(2)} MB descifrados · ${chunkIdx} bloques · "${finalName}"`
     );
 
   } catch (e) {
@@ -592,17 +621,11 @@ async function decryptFile(file) {
 
 // ─── Auto-parse desde el hash de la página ─────────────────────────────────
 (function init() {
-  // Si la página misma fue abierta con #k=... (el usuario pegó la URL completa en el browser)
   const hash = location.hash.slice(1);
-  if (hash.includes('k=')) {
-    const params = {};
-    hash.split('&').forEach(p => { const [k,v]=p.split('='); if(k&&v) params[k]=decodeURIComponent(v); });
-    if (params.k) {
-      // Necesitamos reconstruir la blob URL — no la tenemos directamente
-      // Mostrar input pre-llenado para que el usuario confirme
-      document.getElementById('url-input').value = location.href;
-      document.getElementById('section-input').style.display = 'block';
-    }
+  if (!hash) return;
+  // Si la URL de la página ya incluye #kid= o #k=, pre-rellenar el input
+  if (hash.includes('kid=') || hash.includes('k=')) {
+    document.getElementById('url-input').value = location.href;
   }
 })();
 </script>
