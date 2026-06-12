@@ -4,11 +4,6 @@ on:
   schedule:
     - cron: '0 * * * *'   # cada hora
   workflow_dispatch:
-    inputs:
-      dry_run:
-        description: 'Solo mostrar sin borrar'
-        type: boolean
-        default: false
 
 permissions:
   contents: write
@@ -22,7 +17,12 @@ jobs:
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Expirar llaves
+      - name: Instalar dependencias
+        run: pip install httpx -q
+
+      - name: Expirar llaves y sobreescribir manifests
+        env:
+          OLLAMA_API_KEY: ${{ secrets.OLLAMA_API_KEY }}
         run: python3 expire_keys.py
 
       - name: Commit cambios
