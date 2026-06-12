@@ -273,14 +273,19 @@
         <div class="step-body">
           <div class="step-title">Descarga el blob cifrado</div>
           <div class="step-desc">
-            Tu navegador lo descarga directamente desde el proxy UCLV (gratis en Cuba).
+            Copia el enlace y pégalo en una pestaña nueva del navegador, o usa
+            <code style="font-size:12px;color:var(--accent)">wget -c "&lt;url&gt;" -O video.blob</code>
+            para reanudar si se corta.
           </div>
-          <div class="blob-link-wrap">
-            <div class="blob-link" id="blob-url-display"></div>
+          <div class="blob-link-wrap" style="display:flex;gap:8px;align-items:stretch;margin-top:12px">
+            <div class="blob-link" id="blob-url-display" style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"></div>
+            <button class="btn btn-outline" id="btn-copy" onclick="copyBlobUrl()" style="flex-shrink:0;padding:10px 14px">
+              📋 Copiar
+            </button>
           </div>
-          <a class="btn btn-primary btn-full" id="btn-download-blob" href="#" download>
-            ⬇ Descargar blob (gratis)
-          </a>
+          <button class="btn btn-primary btn-full" onclick="openBlobUrl()">
+            ↗ Abrir en pestaña nueva
+          </button>
         </div>
       </div>
 
@@ -450,12 +455,21 @@ function applyParsed(parsed) {
   display.textContent = shortened;
   display.title = state.blobUrl;
 
-  const btn = document.getElementById('btn-download-blob');
-  btn.href = state.blobUrl;
-  btn.download = `zdst3_${(state.expectedSha256||'blob').slice(0,12)}.blob`;
-  btn.addEventListener('click', () => setTimeout(() => setStepActive(2), 300), { once: true });
-
   setStepActive(1);
+}
+
+function copyBlobUrl() {
+  navigator.clipboard.writeText(state.blobUrl).then(() => {
+    const btn = document.getElementById('btn-copy');
+    btn.textContent = '✓ Copiado';
+    setTimeout(() => { btn.textContent = '📋 Copiar'; }, 2000);
+    setTimeout(() => setStepActive(2), 500);
+  });
+}
+
+function openBlobUrl() {
+  window.open(state.blobUrl, '_blank');
+  setTimeout(() => setStepActive(2), 500);
 }
 
 // ─── Drop Zone ─────────────────────────────────────────────────────────────
