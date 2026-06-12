@@ -1,3 +1,13 @@
 {
-  "uploads": []
+  "uploads": [
+    {
+      "kid": "d50c37d5-f2e5-44c2-a8ab-874c01b65d73",
+      "model": "zdst3/naruto-s00e01:latest",
+      "hash": "804d801d1f73bb11871ffeaf0f38f431177b572c4a3f523535e571da2c400156",
+      "uploaded_at": "2026-06-12T17:07:19.561957+00:00",
+      "expires_at": "2026-06-13T17:07:19.561957+00:00",
+      "expires_hours": 24,
+      "expired": false
+    }
+  ]
 }
