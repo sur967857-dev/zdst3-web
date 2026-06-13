@@ -8,6 +8,15 @@
       "expires_at": "2026-06-13T17:07:19.561957+00:00",
       "expires_hours": 24,
       "expired": false
+    },
+    {
+      "kid": "605d2e77-deb7-41b7-860d-fdb5f3bd91ed",
+      "model": "zdst3/probe-3mb-224051:latest",
+      "hash": "1bbb33eac660dbe5cbbc2a98fc1deeedf79be9b0345f02e07102423007b36b9b",
+      "uploaded_at": "2026-06-13T01:41:03.486287+00:00",
+      "expires_at": "2026-06-13T03:41:03.486287+00:00",
+      "expires_hours": 2,
+      "expired": false
     }
   ]
 }
