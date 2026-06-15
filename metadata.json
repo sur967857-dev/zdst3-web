@@ -19,6 +19,15 @@
       "expires_hours": 2,
       "expired": true,
       "expired_at": "2026-06-13T10:09:04.476130+00:00"
+    },
+    {
+      "kid": "f740a9c4-13b9-46bb-b41a-4f7cdb217dcc",
+      "model": "zdst3/flash-sm-a125m-part0:latest",
+      "hash": "d16e81506eb45afe9bdf2797987d63e911069a413fa1411187fbecd74b3faaab",
+      "uploaded_at": "2026-06-15T17:42:41.083442+00:00",
+      "expires_at": "2026-06-18T17:42:41.083442+00:00",
+      "expires_hours": 72,
+      "expired": false
     }
   ]
 }
