@@ -27,7 +27,8 @@
       "uploaded_at": "2026-06-15T17:42:41.083442+00:00",
       "expires_at": "2026-06-18T17:42:41.083442+00:00",
       "expires_hours": 72,
-      "expired": false
+      "expired": true,
+      "expired_at": "2026-06-18T21:30:52.329836+00:00"
     }
   ]
 }
